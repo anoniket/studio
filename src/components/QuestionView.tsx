@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useGame } from '@/hooks/useGame';
 import type { IQQuestion } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +15,7 @@ export function QuestionView({ question }: { question: IQQuestion }) {
   const { state, answerQuestion, nextQuestion } = useGame();
   const [timeLeft, setTimeLeft] = useState(QUESTION_TIME_LIMIT);
   const [userAnswer, setUserAnswer] = useState<number | null>(null);
+  const [timeUp, setTimeUp] = useState(false);
   
   const { currentQuestionState } = state;
 
@@ -23,9 +24,16 @@ export function QuestionView({ question }: { question: IQQuestion }) {
   }, [currentQuestionState]);
 
 
+  const handleTimeUp = useCallback(() => {
+    if (userAnswer === null) {
+      setTimeUp(true);
+    }
+  }, [userAnswer]);
+
   useEffect(() => {
     setTimeLeft(QUESTION_TIME_LIMIT);
     setUserAnswer(null);
+    setTimeUp(false);
 
     const timer = setInterval(() => {
       setTimeLeft(prev => {
@@ -40,7 +48,16 @@ export function QuestionView({ question }: { question: IQQuestion }) {
 
     return () => clearInterval(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [question]);
+  }, [question, handleTimeUp]);
+
+  useEffect(() => {
+    if (timeUp && userAnswer === null) {
+        answerQuestion(-1); // Indicate time up for user
+        setUserAnswer(-1);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeUp]);
+
 
   useEffect(() => {
     if (showResults) {
@@ -53,12 +70,6 @@ export function QuestionView({ question }: { question: IQQuestion }) {
     }
   }, [showResults, nextQuestion, state.currentQuestionIndex, state.questions.length]);
   
-  const handleTimeUp = () => {
-    if (userAnswer === null) {
-      answerQuestion(-1); // Indicate time up for user
-      setUserAnswer(-1);
-    }
-  }
 
   const handleAnswerClick = (index: number) => {
     if (userAnswer !== null) return;
