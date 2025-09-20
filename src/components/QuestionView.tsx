@@ -15,7 +15,6 @@ export function QuestionView({ question }: { question: IQQuestion }) {
   const { state, answerQuestion, nextQuestion } = useGame();
   const [timeLeft, setTimeLeft] = useState(QUESTION_TIME_LIMIT);
   const [userAnswer, setUserAnswer] = useState<number | null>(null);
-  const [timeUp, setTimeUp] = useState(false);
   
   const { currentQuestionState } = state;
 
@@ -23,23 +22,15 @@ export function QuestionView({ question }: { question: IQQuestion }) {
     return currentQuestionState.userAnswered && currentQuestionState.aiAnswered;
   }, [currentQuestionState]);
 
-
-  const handleTimeUp = useCallback(() => {
-    if (userAnswer === null) {
-      setTimeUp(true);
-    }
-  }, [userAnswer]);
-
   useEffect(() => {
+    // Reset local state for new question
     setTimeLeft(QUESTION_TIME_LIMIT);
     setUserAnswer(null);
-    setTimeUp(false);
 
     const timer = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          handleTimeUp();
           return 0;
         }
         return prev - 1;
@@ -47,15 +38,15 @@ export function QuestionView({ question }: { question: IQQuestion }) {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [question, handleTimeUp]);
+  }, [question]);
 
   useEffect(() => {
-    if (timeUp && userAnswer === null && !currentQuestionState.userAnswered) {
-        answerQuestion(-1); // Indicate time up for user
-        setUserAnswer(-1);
-    }
-  }, [timeUp, userAnswer, answerQuestion, currentQuestionState.userAnswered]);
-
+      // Handle time up
+      if (timeLeft === 0 && userAnswer === null && !currentQuestionState.userAnswered) {
+          answerQuestion(-1); // Indicate time up for user
+          setUserAnswer(-1); // Also set local state to disable buttons
+      }
+  }, [timeLeft, userAnswer, answerQuestion, currentQuestionState.userAnswered]);
 
   useEffect(() => {
     if (showResults) {
@@ -159,7 +150,7 @@ export function QuestionView({ question }: { question: IQQuestion }) {
               <Button
                 key={index}
                 onClick={() => handleAnswerClick(index)}
-                disabled={userAnswer !== null || timeUp}
+                disabled={userAnswer !== null || timeLeft === 0}
                 className={cn('h-auto py-4 text-lg justify-between items-center whitespace-normal', getButtonClass(index))}
               >
                 <span>{option}</span>
