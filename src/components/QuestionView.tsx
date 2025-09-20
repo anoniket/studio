@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
-import { CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, XCircle, Bot, Loader } from 'lucide-react';
 
 const QUESTION_TIME_LIMIT = 30; // seconds
 
@@ -32,6 +32,7 @@ export function QuestionView({ question }: { question: IQQuestion }) {
     }, 1000);
 
     return () => clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [question]);
   
   const handleTimeUp = () => {
@@ -74,9 +75,24 @@ export function QuestionView({ question }: { question: IQQuestion }) {
       <Card className="bg-card/80 backdrop-blur-sm border-border/50 shadow-lg">
         <CardHeader>
           <div className="flex justify-between items-center mb-2">
-            <CardDescription>
-              Question {state.currentQuestionIndex + 1} of {state.questions.length}
-            </CardDescription>
+             <div className="flex items-center gap-4">
+                <CardDescription>
+                Question {state.currentQuestionIndex + 1} of {state.questions.length}
+                </CardDescription>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    {state.isAIAnswering ? (
+                        <>
+                            <Loader className="h-4 w-4 animate-spin" />
+                            <span>AI is thinking...</span>
+                        </>
+                    ) : (
+                        <>
+                            <Bot className="h-4 w-4" />
+                            <span>AI is waiting</span>
+                        </>
+                    )}
+                </div>
+            </div>
             <div className="text-lg font-bold font-mono bg-primary text-primary-foreground rounded-full h-10 w-10 flex items-center justify-center">
               {timeLeft}
             </div>

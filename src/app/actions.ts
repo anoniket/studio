@@ -1,6 +1,13 @@
 'use server';
 
-import { generateDynamicIQQuestions, type GenerateDynamicIQQuestionsInput } from '@/ai/flows/generate-dynamic-iq-questions';
+import {
+  generateDynamicIQQuestions,
+  type GenerateDynamicIQQuestionsInput,
+} from '@/ai/flows/generate-dynamic-iq-questions';
+import {
+  answerQuestion as answerQuestionFlow,
+  type AnswerQuestionInput,
+} from '@/ai/flows/answer-question-flow';
 import type { IQQuestion } from '@/lib/types';
 
 const DUMMY_QUESTIONS: IQQuestion[] = [
@@ -34,23 +41,18 @@ export async function getQuizQuestions(
         throw new Error("AI returned no questions.");
     }
     
-    const parsedQuestions = result.questions.map(q => {
-        try {
-            // The AI might return a JSON string, or a JS object literal string.
-            // A simple eval is risky, but we can try a safe parse.
-            const parsed = JSON.parse(q);
-            if(parsed.question && Array.isArray(parsed.options) && typeof parsed.answerIndex === 'number') {
-                return parsed as IQQuestion;
-            }
-            return null;
-        } catch (e) {
-            // It might not be a JSON string, but just the question text.
-            // In a real scenario, we'd refine the AI prompt to be more reliable.
-            // For now, we will treat this as a failure for this question.
-            console.warn("Could not parse question string:", q);
-            return null;
+    // The AI might return an array of strings where each string is a JSON object, or an array of objects directly
+    const questionsList = (typeof result.questions[0] === 'string')
+      ? result.questions.map(q => JSON.parse(q as string))
+      : result.questions;
+
+    const parsedQuestions = questionsList.map((q: any) => {
+        if(q.question && Array.isArray(q.options) && typeof q.answerIndex === 'number') {
+            return q as IQQuestion;
         }
+        return null;
     }).filter((q): q is IQQuestion => q !== null);
+
 
     if (parsedQuestions.length < input.numberOfQuestions) {
         console.warn(`AI returned only ${parsedQuestions.length} valid questions. Filling with dummies.`);
@@ -65,4 +67,15 @@ export async function getQuizQuestions(
     console.log(`Falling back to ${input.numberOfQuestions} dummy questions.`);
     return DUMMY_QUESTIONS.slice(0, input.numberOfQuestions);
   }
+}
+
+export async function getAIAnswer(input: AnswerQuestionInput): Promise<number> {
+    try {
+        const result = await answerQuestionFlow(input);
+        return result.answerIndex;
+    } catch (error) {
+        console.error('AI failed to answer question:', error);
+        // Fallback to random answer
+        return Math.floor(Math.random() * input.options.length);
+    }
 }
