@@ -47,16 +47,14 @@ export function QuestionView({ question }: { question: IQQuestion }) {
     }, 1000);
 
     return () => clearInterval(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [question, handleTimeUp]);
 
   useEffect(() => {
-    if (timeUp && userAnswer === null) {
+    if (timeUp && userAnswer === null && !currentQuestionState.userAnswered) {
         answerQuestion(-1); // Indicate time up for user
         setUserAnswer(-1);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeUp]);
+  }, [timeUp, userAnswer, answerQuestion, currentQuestionState.userAnswered]);
 
 
   useEffect(() => {
@@ -161,7 +159,7 @@ export function QuestionView({ question }: { question: IQQuestion }) {
               <Button
                 key={index}
                 onClick={() => handleAnswerClick(index)}
-                disabled={userAnswer !== null}
+                disabled={userAnswer !== null || timeUp}
                 className={cn('h-auto py-4 text-lg justify-between items-center whitespace-normal', getButtonClass(index))}
               >
                 <span>{option}</span>
