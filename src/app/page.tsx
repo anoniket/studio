@@ -16,10 +16,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Image from 'next/image';
 
 const mockPlayers = [
-  { name: 'Player 1', avatar: 'https://i.pravatar.cc/150?u=a042581f4e29026024d' },
-  { name: 'Player 2', avatar: 'https://i.pravatar.cc/150?u=a042581f4e29026704d' },
-  { name: 'Player 3', avatar: 'https://i.pravatar.cc/150?u=a04258114e29026702d' },
   { name: 'You', avatar: 'https://i.pravatar.cc/150?u=a042581f4e29026708d' },
+  { name: 'AI Bot', avatar: 'https://i.pravatar.cc/150?u=a042581f4e29026024d' },
 ];
 
 export default function HomePage() {

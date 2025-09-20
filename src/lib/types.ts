@@ -10,6 +10,7 @@ export type Player = {
   name: string;
   score: number;
   avatar: string;
+  isAI?: boolean;
 };
 
 export type GameSettings = {

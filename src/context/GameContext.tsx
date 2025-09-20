@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useReducer, ReactNode } from 'react';
+import React, { createContext, useReducer, ReactNode, useCallback } from 'react';
 import { getQuizQuestions } from '@/app/actions';
 import type { IQQuestion, Player, GameSettings, GameResult } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -32,7 +32,10 @@ const initialState: State = {
   settings: null,
   questions: [],
   currentQuestionIndex: 0,
-  players: [{ id: 'player1', name: 'You', score: 0, avatar: 'https://i.pravatar.cc/150?u=a042581f4e29026708d' }],
+  players: [
+      { id: 'player1', name: 'You', score: 0, avatar: 'https://i.pravatar.cc/150?u=a042581f4e29026708d' },
+      { id: 'player2', name: 'AI Bot', score: 0, avatar: 'https://i.pravatar.cc/150?u=a042581f4e29026024d', isAI: true },
+    ],
   startTime: 0,
 };
 
@@ -43,7 +46,7 @@ const GameReducer = (state: State, action: Action): State => {
         ...initialState,
         status: 'loading',
         settings: action.payload.settings,
-        players: action.payload.players,
+        players: initialState.players, // Keep initial players with AI
       };
     case 'QUESTIONS_LOADED':
       return {
@@ -116,14 +119,45 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       throw error;
     }
   };
+  
+  const aiAnswer = useCallback((question: IQQuestion) => {
+    const aiPlayer = state.players.find(p => p.isAI);
+    if (!aiPlayer) return;
+
+    // Simulate AI thinking time
+    const thinkingTime = Math.random() * 3 + 1; // 1-4 seconds
+    
+    setTimeout(() => {
+        const difficulty = state.settings?.difficulty || 'medium';
+        let chanceOfCorrect = 0.7; // Medium
+        if (difficulty === 'easy') chanceOfCorrect = 0.9;
+        if (difficulty === 'hard') chanceOfCorrect = 0.5;
+
+        if (Math.random() < chanceOfCorrect) {
+            // AI answers correctly
+            const score = Math.max(10, 100 - Math.floor(thinkingTime * 2));
+            dispatch({ type: 'ANSWER_QUESTION', payload: { playerId: aiPlayer.id, score } });
+        } else {
+            // AI answers incorrectly
+            dispatch({ type: 'ANSWER_QUESTION', payload: { playerId: aiPlayer.id, score: 0 } });
+        }
+    }, thinkingTime * 1000);
+
+  }, [state.players, state.settings?.difficulty]);
+
 
   const answerQuestion = (answerIndex: number) => {
     const question = state.questions[state.currentQuestionIndex];
+    
+    // User's answer
     if (question.answerIndex === answerIndex) {
       const timeTaken = (Date.now() - state.startTime) / 1000;
       const score = Math.max(10, 100 - Math.floor(timeTaken * 2));
       dispatch({ type: 'ANSWER_QUESTION', payload: { playerId: 'player1', score } });
     }
+
+    // AI's answer
+    aiAnswer(question);
   };
 
   const nextQuestion = () => {
@@ -135,11 +169,12 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   };
   
   const saveResult = () => {
-    if (!state.settings) return;
+    if (!state.settings || !state.players.find(p => !p.isAI)) return;
+    const userPlayer = state.players.find(p => !p.isAI)!;
     const result: GameResult = {
         id: new Date().toISOString(),
         date: new Date().toISOString(),
-        score: state.players[0].score,
+        score: userPlayer.score,
         totalQuestions: state.questions.length,
         settings: state.settings,
     };
