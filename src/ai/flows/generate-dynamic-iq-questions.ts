@@ -10,6 +10,13 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
+const QuestionSchema = z.object({
+  question: z.string().describe('The question text.'),
+  options: z.array(z.string()).describe('An array of 4 possible answers.'),
+  answerIndex: z.number().describe('The index of the correct answer in the options array.'),
+  explanation: z.string().optional().describe('A brief explanation of the correct answer.')
+});
+
 const GenerateDynamicIQQuestionsInputSchema = z.object({
   numberOfQuestions: z
     .number()
@@ -24,7 +31,7 @@ export type GenerateDynamicIQQuestionsInput = z.infer<
 >;
 
 const GenerateDynamicIQQuestionsOutputSchema = z.object({
-  questions: z.array(z.string()).describe('An array of generated IQ questions.'),
+  questions: z.array(QuestionSchema).describe('An array of generated IQ questions.'),
 });
 export type GenerateDynamicIQQuestionsOutput = z.infer<
   typeof GenerateDynamicIQQuestionsOutputSchema
@@ -50,8 +57,9 @@ const generateDynamicIQQuestionsPrompt = ai.definePrompt({
   {{/if}}
 
   Ensure that the questions are challenging and diverse, covering a range of cognitive skills.
+  Each question must have a question, 4 options, the index of the correct answer, and a brief explanation.
 
-  The questions should be returned in JSON format.
+  Return the questions in the specified JSON format.
   `,
 });
 

@@ -41,12 +41,7 @@ export async function getQuizQuestions(
         throw new Error("AI returned no questions.");
     }
     
-    // The AI might return an array of strings where each string is a JSON object, or an array of objects directly
-    const questionsList = (typeof result.questions[0] === 'string')
-      ? result.questions.map(q => JSON.parse(q as string))
-      : result.questions;
-
-    const parsedQuestions = questionsList.map((q: any) => {
+    const parsedQuestions = result.questions.map((q: any) => {
         if(q.question && Array.isArray(q.options) && typeof q.answerIndex === 'number') {
             return q as IQQuestion;
         }
@@ -71,6 +66,10 @@ export async function getQuizQuestions(
 
 export async function getAIAnswer(input: AnswerQuestionInput): Promise<number> {
     try {
+        // Add a random delay to simulate thinking time
+        const delay = Math.random() * 3000 + 1000; // 1 to 4 seconds
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
         const result = await answerQuestionFlow(input);
         return result.answerIndex;
     } catch (error) {

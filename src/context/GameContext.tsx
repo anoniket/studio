@@ -1,11 +1,18 @@
 'use client';
 
-import React, { createContext, useReducer, ReactNode, useCallback } from 'react';
+import React, { createContext, useReducer, ReactNode, useCallback, useEffect } from 'react';
 import { getQuizQuestions, getAIAnswer } from '@/app/actions';
 import type { IQQuestion, Player, GameSettings, GameResult } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 
 type GameStatus = 'setup' | 'loading' | 'playing' | 'results';
+
+type QuestionState = {
+  isAIThinking: boolean;
+  aiAnswered: boolean;
+  userAnswered: boolean;
+  aiAnswer: number | null;
+}
 
 type State = {
   status: GameStatus;
@@ -14,18 +21,25 @@ type State = {
   currentQuestionIndex: number;
   players: Player[];
   startTime: number;
-  isAIAnswering: boolean;
+  currentQuestionState: QuestionState;
 };
 
 type Action =
   | { type: 'START_GAME'; payload: { settings: GameSettings; players: Player[] } }
   | { type: 'QUESTIONS_LOADED'; payload: { questions: IQQuestion[] } }
   | { type: 'QUESTIONS_FAILED' }
-  | { type: 'ANSWER_QUESTION'; payload: { playerId: string; score: number } }
+  | { type: 'ANSWER_SUBMITTED'; payload: { playerId: string; score: number, answerIndex: number } }
+  | { type: 'AI_THINKING' }
   | { type: 'NEXT_QUESTION' }
   | { type: 'END_GAME' }
-  | { type: 'RESET_GAME' }
-  | { type: 'SET_AI_ANSWERING', payload: boolean };
+  | { type: 'RESET_GAME' };
+
+const initialQuestionState: QuestionState = {
+  isAIThinking: false,
+  aiAnswered: false,
+  userAnswered: false,
+  aiAnswer: null,
+};
 
 const initialState: State = {
   status: 'setup',
@@ -37,7 +51,7 @@ const initialState: State = {
       { id: 'player2', name: 'AI Bot', score: 0, avatar: 'https://i.pravatar.cc/150?u=a042581f4e29026024d', isAI: true },
     ],
   startTime: 0,
-  isAIAnswering: false,
+  currentQuestionState: initialQuestionState
 };
 
 const GameReducer = (state: State, action: Action): State => {
@@ -47,7 +61,7 @@ const GameReducer = (state: State, action: Action): State => {
         ...initialState,
         status: 'loading',
         settings: action.payload.settings,
-        players: initialState.players, // Keep initial players with AI
+        players: initialState.players,
       };
     case 'QUESTIONS_LOADED':
       return {
@@ -62,7 +76,13 @@ const GameReducer = (state: State, action: Action): State => {
         ...state,
         status: 'setup',
       };
-    case 'ANSWER_QUESTION':
+    case 'AI_THINKING':
+      return {
+          ...state,
+          currentQuestionState: { ...state.currentQuestionState, isAIThinking: true },
+      }
+    case 'ANSWER_SUBMITTED':
+      const isAI = action.payload.playerId === 'player2';
       return {
         ...state,
         players: state.players.map(p =>
@@ -70,6 +90,13 @@ const GameReducer = (state: State, action: Action): State => {
             ? { ...p, score: p.score + action.payload.score }
             : p
         ),
+        currentQuestionState: {
+          ...state.currentQuestionState,
+          isAIThinking: isAI ? false : state.currentQuestionState.isAIThinking,
+          aiAnswered: isAI || state.currentQuestionState.aiAnswered,
+          userAnswered: !isAI || state.currentQuestionState.userAnswered,
+          aiAnswer: isAI ? action.payload.answerIndex : state.currentQuestionState.aiAnswer,
+        }
       };
     case 'NEXT_QUESTION':
       if (state.currentQuestionIndex < state.questions.length - 1) {
@@ -77,7 +104,7 @@ const GameReducer = (state: State, action: Action): State => {
           ...state,
           currentQuestionIndex: state.currentQuestionIndex + 1,
           startTime: Date.now(),
-          isAIAnswering: false,
+          currentQuestionState: initialQuestionState,
         };
       }
       return { ...state, status: 'results' };
@@ -85,8 +112,6 @@ const GameReducer = (state: State, action: Action): State => {
       return { ...state, status: 'results' };
     case 'RESET_GAME':
       return initialState;
-    case 'SET_AI_ANSWERING':
-      return { ...state, isAIAnswering: action.payload };
     default:
       return state;
   }
@@ -108,6 +133,32 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(GameReducer, initialState);
   const { toast } = useToast();
 
+  const aiAnswer = useCallback(async (question: IQQuestion) => {
+    const aiPlayer = state.players.find(p => p.isAI);
+    if (!aiPlayer) return;
+
+    dispatch({ type: 'AI_THINKING' });
+
+    const startTime = Date.now();
+    const aiAnswerIndex = await getAIAnswer({ question: question.question, options: question.options });
+    const timeTaken = (Date.now() - startTime) / 1000;
+
+    let score = 0;
+    if (aiAnswerIndex === question.answerIndex) {
+        score = Math.max(10, 100 - Math.floor(timeTaken * 2));
+    }
+    dispatch({ type: 'ANSWER_SUBMITTED', payload: { playerId: aiPlayer.id, score, answerIndex: aiAnswerIndex } });
+
+  }, [state.players]);
+  
+  useEffect(() => {
+    if (state.status === 'playing' && !state.currentQuestionState.aiAnswered && !state.currentQuestionState.isAIThinking) {
+      const question = state.questions[state.currentQuestionIndex];
+      aiAnswer(question);
+    }
+  }, [state.status, state.currentQuestionIndex, state.questions, aiAnswer, state.currentQuestionState.aiAnswered, state.currentQuestionState.isAIThinking]);
+
+
   const startGame = async (settings: GameSettings) => {
     dispatch({ type: 'START_GAME', payload: { settings, players: initialState.players } });
     try {
@@ -123,43 +174,21 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       throw error;
     }
   };
-  
-  const aiAnswer = useCallback(async (question: IQQuestion) => {
-    const aiPlayer = state.players.find(p => p.isAI);
-    if (!aiPlayer) return;
-
-    dispatch({ type: 'SET_AI_ANSWERING', payload: true });
-
-    const startTime = Date.now();
-    const aiAnswerIndex = await getAIAnswer({ question: question.question, options: question.options });
-    const timeTaken = (Date.now() - startTime) / 1000;
-
-    if (aiAnswerIndex === question.answerIndex) {
-        const score = Math.max(10, 100 - Math.floor(timeTaken * 2));
-        dispatch({ type: 'ANSWER_QUESTION', payload: { playerId: aiPlayer.id, score } });
-    } else {
-        dispatch({ type: 'ANSWER_QUESTION', payload: { playerId: aiPlayer.id, score: 0 } });
-    }
-
-    dispatch({ type: 'SET_AI_ANSWERING', payload: false });
-
-  }, [state.players]);
-
 
   const answerQuestion = (answerIndex: number) => {
-    const question = state.questions[state.currentQuestionIndex];
+    if (state.currentQuestionState.userAnswered) return;
     
-    // User's answer
+    const question = state.questions[state.currentQuestionIndex];
+    const userPlayer = state.players.find(p => !p.isAI)!;
+    
+    let score = 0;
     if (answerIndex !== -1) { // -1 indicates time up
         if (question.answerIndex === answerIndex) {
           const timeTaken = (Date.now() - state.startTime) / 1000;
-          const score = Math.max(10, 100 - Math.floor(timeTaken * 2));
-          dispatch({ type: 'ANSWER_QUESTION', payload: { playerId: 'player1', score } });
+          score = Math.max(10, 100 - Math.floor(timeTaken * 2));
         }
     }
-
-    // AI's answer
-    aiAnswer(question);
+    dispatch({ type: 'ANSWER_SUBMITTED', payload: { playerId: userPlayer.id, score, answerIndex } });
   };
 
   const nextQuestion = () => {
